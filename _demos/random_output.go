@@ -1,6 +1,6 @@
 package main
 
-import "github.com/nsf/termbox-go"
+import "github.com/scoursen/termbox-go"
 import "math/rand"
 import "time"
 

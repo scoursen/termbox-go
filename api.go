@@ -21,36 +21,45 @@ import "runtime"
 //      }
 //      defer termbox.Close()
 func Init() error {
-	var err error
-
-	out, err = os.OpenFile("/dev/tty", syscall.O_WRONLY, 0)
+	out, err := os.OpenFile("/dev/tty", syscall.O_WRONLY, 0)
 	if err != nil {
 		return err
 	}
-	in, err = syscall.Open("/dev/tty", syscall.O_RDONLY, 0)
+	in, err := syscall.Open("/dev/tty", syscall.O_RDONLY, 0)
 	if err != nil {
 		return err
 	}
-
-	err = setup_term()
-	if err != nil {
-		return fmt.Errorf("termbox: error while reading terminfo data: %v", err)
-	}
-
 	signal.Notify(sigwinch, syscall.SIGWINCH)
 	signal.Notify(sigio, syscall.SIGIO)
+	_, err = doInit(out, in, "")
+	return err
+}
+
+func NewTerm(output, input *os.File, term string) (*screen, error) {
+	scr, err := doInit(output, int(input.Fd()), term)
+	signal.Notify(sigio, syscall.SIGIO)
+	return scr, err
+}
+
+func doInit(out *os.File, in int, term string) (*screen, error) {
+	var err error
+
+	err = setup_term(term)
+	if err != nil {
+		return nil, fmt.Errorf("termbox: error while reading terminfo data: %v", err)
+	}
 
 	_, err = fcntl(in, syscall.F_SETFL, syscall.O_ASYNC|syscall.O_NONBLOCK)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	_, err = fcntl(in, syscall.F_SETOWN, syscall.Getpid())
 	if runtime.GOOS != "darwin" && err != nil {
-		return err
+		return nil, err
 	}
 	err = tcgetattr(out.Fd(), &orig_tios)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	tios := orig_tios
@@ -67,7 +76,7 @@ func Init() error {
 
 	err = tcsetattr(out.Fd(), &tios)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	out.WriteString(funcs[t_enter_ca])
@@ -106,7 +115,9 @@ func Init() error {
 	}()
 
 	IsInit = true
-	return nil
+	scr := &screen{out, in}
+	current = scr
+	return scr, nil
 }
 
 // Interrupt an in-progress call to PollEvent by causing it to return
@@ -120,23 +131,23 @@ func Interrupt() {
 // when termbox's functionality isn't required anymore.
 func Close() {
 	quit <- 1
-	out.WriteString(funcs[t_show_cursor])
-	out.WriteString(funcs[t_sgr0])
-	out.WriteString(funcs[t_clear_screen])
-	out.WriteString(funcs[t_exit_ca])
-	out.WriteString(funcs[t_exit_keypad])
-	out.WriteString(funcs[t_exit_mouse])
-	tcsetattr(out.Fd(), &orig_tios)
+	current.out.WriteString(funcs[t_show_cursor])
+	current.out.WriteString(funcs[t_sgr0])
+	current.out.WriteString(funcs[t_clear_screen])
+	current.out.WriteString(funcs[t_exit_ca])
+	current.out.WriteString(funcs[t_exit_keypad])
+	current.out.WriteString(funcs[t_exit_mouse])
+	tcsetattr(current.out.Fd(), &orig_tios)
 
-	out.Close()
-	syscall.Close(in)
+	current.out.Close()
+	syscall.Close(current.in)
 
 	// reset the state, so that on next Init() it will work again
 	termw = 0
 	termh = 0
 	input_mode = InputEsc
-	out = nil
-	in = 0
+	current.out = nil
+	current.in = 0
 	lastfg = attr_invalid
 	lastbg = attr_invalid
 	lastx = coord_invalid
@@ -296,7 +307,7 @@ func PollRawEvent(data []byte) Event {
 
 		case <-sigwinch:
 			event.Type = EventResize
-			event.Width, event.Height = get_term_size(out.Fd())
+			event.Width, event.Height = get_term_size(current.out.Fd())
 			return event
 		}
 	}
@@ -340,7 +351,7 @@ func PollEvent() Event {
 
 		case <-sigwinch:
 			event.Type = EventResize
-			event.Width, event.Height = get_term_size(out.Fd())
+			event.Width, event.Height = get_term_size(current.out.Fd())
 			return event
 		}
 	}
@@ -387,9 +398,9 @@ func SetInputMode(mode InputMode) InputMode {
 		mode &^= InputAlt
 	}
 	if mode&InputMouse != 0 {
-		out.WriteString(funcs[t_enter_mouse])
+		current.out.WriteString(funcs[t_enter_mouse])
 	} else {
-		out.WriteString(funcs[t_exit_mouse])
+		current.out.WriteString(funcs[t_exit_mouse])
 	}
 
 	input_mode = mode

@@ -41,6 +41,11 @@ type input_event struct {
 	err  error
 }
 
+type screen struct {
+	out *os.File
+	in  int
+}
+
 var (
 	// term specific sequences
 	keys  []string
@@ -54,8 +59,8 @@ var (
 	termh          int
 	input_mode     = InputEsc
 	output_mode    = OutputNormal
-	out            *os.File
-	in             int
+	screens        = make(map[int]screen)
+	current        *screen
 	lastfg         = attr_invalid
 	lastbg         = attr_invalid
 	lastx          = coord_invalid
@@ -231,7 +236,7 @@ func send_char(x, y int, ch rune) {
 }
 
 func flush() error {
-	_, err := io.Copy(out, &outbuf)
+	_, err := io.Copy(current.out, &outbuf)
 	outbuf.Reset()
 	if err != nil {
 		return err
@@ -258,7 +263,7 @@ func send_clear() error {
 }
 
 func update_size_maybe() error {
-	w, h := get_term_size(out.Fd())
+	w, h := get_term_size(current.out.Fd())
 	if w != termw || h != termh {
 		termw, termh = w, h
 		back_buffer.resize(termw, termh)

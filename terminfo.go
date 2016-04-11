@@ -27,13 +27,15 @@ const (
 	ti_mouse_leave   = "\x1b[?1006l\x1b[?1015l\x1b[?1002l\x1b[?1000l"
 )
 
-func load_terminfo() ([]byte, error) {
+func load_terminfo(term string) ([]byte, error) {
 	var data []byte
 	var err error
 
-	term := os.Getenv("TERM")
 	if term == "" {
-		return nil, fmt.Errorf("termbox: TERM not set")
+		term := os.Getenv("TERM")
+		if term == "" {
+			return nil, fmt.Errorf("termbox: TERM not set")
+		}
 	}
 
 	// The following behaviour follows the one described in terminfo(5) as
@@ -131,12 +133,12 @@ func setup_term_builtin() error {
 	return errors.New("termbox: unsupported terminal")
 }
 
-func setup_term() (err error) {
+func setup_term(term string) (err error) {
 	var data []byte
 	var header [6]int16
 	var str_offset, table_offset int16
 
-	data, err = load_terminfo()
+	data, err = load_terminfo(term)
 	if err != nil {
 		return setup_term_builtin()
 	}

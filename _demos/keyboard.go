@@ -1,7 +1,8 @@
 package main
 
-import "github.com/nsf/termbox-go"
+import "github.com/scoursen/termbox-go"
 import "fmt"
+import "os"
 
 type key struct {
 	x  int
@@ -658,6 +659,9 @@ func dispatch_press(ev *termbox.Event) {
 }
 
 func main() {
+	//_, err := termbox.NewTerm(os.Stdout, os.Stdin, "xterm")
+	if &os.Stdin != nil {
+	}
 	err := termbox.Init()
 	if err != nil {
 		panic(err)
