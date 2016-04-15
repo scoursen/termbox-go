@@ -41,15 +41,14 @@ type input_event struct {
 	err  error
 }
 
-type screen struct {
-	out *os.File
-	in  int
-}
-
 var (
 	// term specific sequences
 	keys  []string
 	funcs []string
+
+	// terminal support
+	current *screen
+	screens = make(map[*screen]int)
 
 	// termbox inner state
 	orig_tios      syscall_Termios
@@ -59,8 +58,6 @@ var (
 	termh          int
 	input_mode     = InputEsc
 	output_mode    = OutputNormal
-	screens        = make(map[int]screen)
-	current        *screen
 	lastfg         = attr_invalid
 	lastbg         = attr_invalid
 	lastx          = coord_invalid

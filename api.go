@@ -37,6 +37,11 @@ func Init() error {
 
 func NewTerm(output, input *os.File, term string) (*screen, error) {
 	scr, err := doInit(output, int(input.Fd()), term)
+	if current == nil {
+		copy_globals_to(scr)
+		current = scr
+	}
+	screens[scr] = 1
 	signal.Notify(sigio, syscall.SIGIO)
 	return scr, err
 }
@@ -115,8 +120,7 @@ func doInit(out *os.File, in int, term string) (*screen, error) {
 	}()
 
 	IsInit = true
-	scr := &screen{out, in}
-	current = scr
+	scr := &screen{out: out, in: in}
 	return scr, nil
 }
 
